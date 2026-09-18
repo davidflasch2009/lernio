@@ -1,9 +1,9 @@
 /*
-  Service Worker for Schulmappe PWA
+  Service Worker for Lernio PWA
   — caches the app shell for offline use
   — lets Firebase handle data sync
 */
-const CACHE = 'schulmappe-v1';
+const CACHE = 'lernio-v1';
 const SHELL = [
   './',
   './index.html',

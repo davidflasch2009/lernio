@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Schulmappe</title>
+<title>Lernio</title>
 <meta name="description" content="Dein Schulplaner — HÜs, Tests, Kalender">
 <meta name="theme-color" content="#0b6e6b" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0c1413" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Schulmappe">
+<meta name="apple-mobile-web-app-title" content="Lernio">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -920,7 +920,7 @@ input,select,textarea,button{font-family:inherit}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6.5A2.5 2.5 0 0 0 4 21z"/><path d="M4 18.5A2.5 2.5 0 0 1 6.5 16H20"/><path d="M9 7.5h6"/></svg>
       </span>
       <span>
-        <span class="brand-name">Schulmappe</span>
+        <span class="brand-name">Lernio</span>
         <span class="brand-sub" id="brand-sub">3AHITM</span>
       </span>
     </div>
@@ -940,7 +940,7 @@ input,select,textarea,button{font-family:inherit}
         <span class="brand-mark" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6.5A2.5 2.5 0 0 0 4 21z"/><path d="M4 18.5A2.5 2.5 0 0 1 6.5 16H20"/><path d="M9 7.5h6"/></svg>
         </span>
-        <span><span class="brand-name">Schulmappe</span></span>
+        <span><span class="brand-name">Lernio</span></span>
       </div>
       <div id="topbar-actions">
         <button class="icon-btn" id="theme-toggle-m" type="button" title="Hell / Dunkel umschalten" aria-label="Hell / Dunkel umschalten"></button>
@@ -1674,10 +1674,10 @@ function buildICS() {
   const t0 = today();
   const rt = Store.settings.reminderTime || '16:00';
   const startHHMM = addMinutes(rt, 0), endHHMM = addMinutes(rt, 45);
-  const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Schulmappe//Schulplaner//DE',
+  const L = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Lernio//Schulplaner//DE',
              'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
-             'X-WR-CALNAME:Schulmappe', 'X-WR-TIMEZONE:Europe/Vienna',
-             'X-WR-CALDESC:Hausübungen, Tests und Lerntage aus der Schulmappe'].concat(VTIMEZONE);
+             'X-WR-CALNAME:Lernio', 'X-WR-TIMEZONE:Europe/Vienna',
+             'X-WR-CALDESC:Hausübungen, Tests und Lerntage aus Lernio'].concat(VTIMEZONE);
   let nHw = 0, nEx = 0, nStudy = 0, nWork = 0;
 
   const ev = lines => { L.push('BEGIN:VEVENT'); lines.forEach(l => L.push(l)); L.push('END:VEVENT'); };
@@ -1720,7 +1720,7 @@ function buildICS() {
         'DESCRIPTION:' + icsEsc('Heute dran: ' + what +
           '\n\n' + h.title + ' — Abgabe ' + fmtLong(h.due) +
           ', noch ' + left + (left === 1 ? ' Tag.' : ' Tage.') +
-          (wdone[p.date] ? '\n\n(in der Schulmappe schon abgehakt)' : '')),
+          (wdone[p.date] ? '\n\n(in Lernio schon abgehakt)' : '')),
         'CATEGORIES:Hausübung', 'TRANSP:TRANSPARENT',
       ].concat(alarm('-PT5M', 'Weiterarbeiten: ' + s.name + ' (' + what + ')')));
     });
@@ -2523,7 +2523,7 @@ function viewMehr() {
   h += '<div class="card card-pad">' +
     '<div class="sec-head" style="margin-bottom:4px"><span class="sec-title">Erinnerungen am Handy</span></div>' +
     '<p style="font-size:13.5px;color:var(--ink-2);line-height:1.55;margin-bottom:4px">' +
-      'Die Schulmappe schreibt alle Termine und Lerntage in eine Kalenderdatei. Einmal in deinen iPhone-Kalender importiert, ' +
+      'Lernio schreibt alle Termine und Lerntage in eine Kalenderdatei. Einmal in deinen iPhone-Kalender importiert, ' +
       'schickt dir iOS selbst die Benachrichtigungen — auch wenn die App zu ist.</p>' +
     '<div class="export-stat">' +
       '<div><b>' + ics.nStudy + '</b><span>Lerntage</span></div>' +
@@ -3256,9 +3256,9 @@ function modalExport() {
           'Datei laden (.zip)</button>' +
           '<div class="sec-head" style="margin-top:20px;margin-bottom:0"><span class="sec-title">Am iPhone</span></div>' +
           '<ol class="steps">' +
-            '<li>Die geladene <b>schulmappe.zip</b> in der <b>Dateien</b>-App antippen — sie entpackt sich zu <b>schulmappe.ics</b>.</li>' +
+            '<li>Die geladene <b>lernio.ics</b> in der <b>Dateien</b>-App antippen.</li>' +
             '<li>Die <b>.ics</b> antippen. iOS fragt, in welchen Kalender die Termine sollen.</li>' +
-            '<li>Am besten einen eigenen Kalender <b>Schulmappe</b> anlegen — dann bleibt alles beisammen.</li>' +
+            '<li>Am besten einen eigenen Kalender <b>Lernio</b> anlegen — dann bleibt alles beisammen.</li>' +
             '<li>Fertig. Jeden Lerntag um <b class="num">' + esc(Store.settings.reminderTime || '16:00') +
               '</b> meldet sich das iPhone von selbst.</li>' +
           '</ol>' +
@@ -3268,7 +3268,7 @@ function modalExport() {
           '<details style="margin-top:14px"><summary style="cursor:pointer;font-size:13px;color:var(--ink-3);padding:4px 0">' +
             'Am Laptop lieber selbst speichern?</summary>' +
             '<p style="font-size:13px;color:var(--ink-2);line-height:1.55;margin:8px 0">' +
-            'Text kopieren, in einen Editor einfügen und als <b>schulmappe.ics</b> speichern. Doppelklick öffnet den Kalender.</p>' +
+            'Text kopieren, in einen Editor einfügen und als <b>lernio.ics</b> speichern. Doppelklick öffnet den Kalender.</p>' +
             '<textarea class="ics-out" id="ics-text" readonly>' + esc(ics.text) + '</textarea>' +
             '<button class="btn btn-sm btn-block" type="button" data-act="export-copy" style="margin-top:7px">' + I.copy + 'Text kopieren</button>' +
           '</details>')
@@ -3392,7 +3392,7 @@ async function doExportZip() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'schulmappe.ics';
+    a.download = 'lernio.ics';
     document.body.appendChild(a);
     a.click();
     setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 200);

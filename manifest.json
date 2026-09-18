@@ -1,6 +1,6 @@
 {
-  "name": "Schulmappe",
-  "short_name": "Schulmappe",
+  "name": "Lernio",
+  "short_name": "Lernio",
   "description": "Dein Schulplaner — HÜs, Tests, Kalender",
   "start_url": ".",
   "display": "standalone",
