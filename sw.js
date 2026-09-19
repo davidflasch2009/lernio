@@ -3,7 +3,9 @@
   — caches the app shell for offline use
   — lets Firebase handle data sync
 */
-const CACHE = 'lernio-v1';
+/* bump this on every deploy that changes index.html so phones actually
+   pick up the update instead of serving a stale cached shell */
+const CACHE = 'lernio-v3';
 const SHELL = [
   './',
   './index.html',
@@ -22,7 +24,7 @@ self.addEventListener('install', ev => {
   );
 });
 
-/* activate: clean old caches */
+/* activate: clean old caches immediately and take control of open tabs */
 self.addEventListener('activate', ev => {
   ev.waitUntil(
     caches.keys().then(keys =>
@@ -31,7 +33,13 @@ self.addEventListener('activate', ev => {
   );
 });
 
-/* fetch: serve from cache, fall back to network */
+/* fetch strategy:
+   - page navigations (opening/reloading the app) → NETWORK FIRST, cache as
+     fallback only when offline. This is what makes an update show up the
+     next time the app is opened, instead of being stuck on an old cached
+     version until the cache name changes.
+   - everything else (fonts, icons, manifest) → cache first, network fallback,
+     since those rarely change and don't need to be fresh every load. */
 self.addEventListener('fetch', ev => {
   const url = new URL(ev.request.url);
 
@@ -44,22 +52,29 @@ self.addEventListener('fetch', ev => {
     return; /* let it go to network */
   }
 
+  if (ev.request.mode === 'navigate') {
+    ev.respondWith(
+      fetch(ev.request)
+        .then(resp => {
+          const clone = resp.clone();
+          caches.open(CACHE).then(c => c.put(ev.request, clone));
+          return resp;
+        })
+        .catch(() => caches.match(ev.request).then(c => c || caches.match('./index.html')))
+    );
+    return;
+  }
+
   ev.respondWith(
     caches.match(ev.request).then(cached => {
       if (cached) return cached;
       return fetch(ev.request).then(resp => {
-        /* cache successful GET responses for fonts etc */
         if (resp.ok && ev.request.method === 'GET') {
           const clone = resp.clone();
           caches.open(CACHE).then(c => c.put(ev.request, clone));
         }
         return resp;
-      }).catch(() => {
-        /* offline fallback for navigate requests */
-        if (ev.request.mode === 'navigate') {
-          return caches.match('./index.html');
-        }
-      });
+      }).catch(() => {});
     })
   );
 });
