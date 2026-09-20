@@ -564,6 +564,7 @@ input,select,textarea,button{font-family:inherit}
 .dash-day-chip{font-size:10.5px;display:flex;align-items:center;gap:4px;line-height:1.3;color:var(--ink-2)}
 .dash-day-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
 .dash-day-empty{font-size:10.5px;color:var(--ink-4);font-style:italic}
+.dash-day.is-holiday{background:color-mix(in srgb,var(--ok) 6%,var(--surface));border-color:color-mix(in srgb,var(--ok) 25%,var(--line))}
 
 .banner{
   display:flex;gap:12px;align-items:flex-start;
@@ -641,6 +642,9 @@ input,select,textarea,button{font-family:inherit}
 .cal-ev.ev-appt{background:var(--surface-2);color:var(--ink-3);font-weight:500;
   border-left:2px solid var(--ec);border-radius:2px 4px 4px 2px}
 .cal-ev.ev-done{opacity:.4;text-decoration:line-through}
+.cal-ev.ev-holiday{background:color-mix(in srgb,var(--ok) 18%,var(--surface));color:var(--ok);font-weight:600;border:1px solid color-mix(in srgb,var(--ok) 30%,transparent)}
+.cal-day.is-holiday:not(.is-out) .cal-daynum{color:var(--ok)}
+.cal-day.is-holiday:not(.is-out){background:color-mix(in srgb,var(--ok) 8%,var(--surface))}
 .cal-dot.dot-appt{background:var(--ink-3);opacity:.5;width:5px;height:5px;border:0;border-radius:1px}
 .cal-more{font-size:10px;color:var(--ink-3);padding-left:5px;font-family:var(--font-mono)}
 .cal-dots{display:none;gap:2.5px;flex-wrap:wrap;padding:0 2px}
@@ -1279,6 +1283,120 @@ function urgency(dateStr, done) {
 const URG_LABEL = { overdue: 'überfällig', today: 'heute', tomorrow: 'morgen', soon: 'bald', later: '', done: 'erledigt' };
 
 /* ============================================================
+   2b. FEIERTAGE & SCHULFERIEN — Österreich / Kärnten
+   ============================================================ */
+
+/* Gauss'scher Osteralgorithmus (Computus) — gültig für den
+   Gregorianischen Kalender, liefert Ostersonntag als Date. */
+function easterDate(year) {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(year, month - 1, day);
+}
+
+/* Cache: zwei Jahre gleichzeitig (Schuljahr = Sept→Juli) */
+let _holidayMaps = {};
+
+function buildHolidayMap(year) {
+  if (_holidayMaps[year]) return _holidayMaps[year];
+  const map = {};
+  const add = (d, name, type) => {
+    const key = isoOf(d);
+    if (!map[key]) map[key] = { name, type };
+  };
+  const addRange = (from, to, name) => {
+    const cur = new Date(from.getTime());
+    while (cur <= to) {
+      add(new Date(cur), name, 'ferien');
+      cur.setDate(cur.getDate() + 1);
+    }
+  };
+
+  /* ---- Fixe österreichische Feiertage ---- */
+  add(new Date(year, 0, 1),  'Neujahr', 'feiertag');
+  add(new Date(year, 0, 6),  'Hl. Drei Könige', 'feiertag');
+  add(new Date(year, 4, 1),  'Staatsfeiertag', 'feiertag');
+  add(new Date(year, 7, 15), 'Mariä Himmelfahrt', 'feiertag');
+  add(new Date(year, 9, 26), 'Nationalfeiertag', 'feiertag');
+  add(new Date(year, 10, 1), 'Allerheiligen', 'feiertag');
+  add(new Date(year, 11, 8), 'Mariä Empfängnis', 'feiertag');
+  add(new Date(year, 11, 25), 'Weihnachten', 'feiertag');
+  add(new Date(year, 11, 26), 'Stefanitag', 'feiertag');
+
+  /* ---- Bewegliche Feiertage (von Ostern abgeleitet) ---- */
+  const easter = easterDate(year);
+  const eOff = (n) => { const d = new Date(easter); d.setDate(d.getDate() + n); return d; };
+  add(eOff(1),  'Ostermontag', 'feiertag');
+  add(eOff(39), 'Christi Himmelfahrt', 'feiertag');
+  add(eOff(50), 'Pfingstmontag', 'feiertag');
+  add(eOff(60), 'Fronleichnam', 'feiertag');
+
+  /* ---- Kärntner Schulferien ---- */
+
+  /* Herbstferien: 27. Oktober – 31. Oktober */
+  addRange(new Date(year, 9, 27), new Date(year, 9, 31), 'Herbstferien');
+
+  /* Weihnachtsferien: 24. Dezember – 6. Jänner */
+  addRange(new Date(year, 11, 24), new Date(year, 11, 31), 'Weihnachtsferien');
+  addRange(new Date(year, 0, 1), new Date(year, 0, 6), 'Weihnachtsferien');
+
+  /* Semesterferien Kärnten: 2. Montag im Februar, eine Woche (Mo–Sa) */
+  const feb1 = new Date(year, 1, 1);
+  let firstMon = 1 + ((8 - feb1.getDay()) % 7 || 7);
+  const semStart = new Date(year, 1, firstMon + 7);
+  addRange(semStart, new Date(year, 1, semStart.getDate() + 5), 'Semesterferien');
+
+  /* Osterferien: Samstag vor Palmsonntag bis Dienstag nach Ostermontag */
+  addRange(eOff(-8), eOff(2), 'Osterferien');
+
+  /* Pfingstferien: Samstag vor Pfingsten bis Dienstag nach Pfingstmontag */
+  addRange(eOff(48), eOff(51), 'Pfingstferien');
+
+  /* Sommerferien: Samstag nach dem 1. Montag im Juli bis 1. Sonntag im September */
+  const jul1 = new Date(year, 6, 1);
+  const firstMonJul = 1 + ((8 - jul1.getDay()) % 7 || 7);
+  const sommerStart = new Date(year, 6, firstMonJul + 5);
+  const sep1 = new Date(year, 8, 1);
+  const firstSunSep = 1 + ((7 - sep1.getDay()) % 7);
+  const sommerEnd = new Date(year, 8, firstSunSep);
+  addRange(sommerStart, sommerEnd, 'Sommerferien');
+
+  _holidayMaps[year] = map;
+  return map;
+}
+
+/* Haupt-API: gibt { name, type } zurück oder null */
+function holidayInfo(dateStr) {
+  const y = parseISO(dateStr).getFullYear();
+  const m = buildHolidayMap(y);
+  return m[dateStr] || null;
+}
+
+function isHoliday(dateStr) {
+  const info = holidayInfo(dateStr);
+  return info && info.type === 'feiertag';
+}
+function isSchoolFree(dateStr) {
+  return !!holidayInfo(dateStr);
+}
+function holidayName(dateStr) {
+  const info = holidayInfo(dateStr);
+  return info ? info.name : null;
+}
+
+/* ============================================================
    3. CONSTANTS
    ============================================================ */
 /* 14 hues spread evenly around the wheel at roughly equal lightness, so no
@@ -1720,6 +1838,13 @@ function capacityFrom(wd, appts) {
   return Math.max(0.5, Math.round(cap * 2) / 2);
 }
 function dayCapacity(dateStr) {
+  /* Feiertage & Schulferien = kein Unterricht → volle Kapazität wie ein freier Tag */
+  if (isSchoolFree(dateStr)) {
+    const appts = apptsOn(dateStr);
+    let cap = 6; // wie Wochenende/frei
+    appts.forEach(a => { cap -= apptCost(a); });
+    return Math.max(0.5, Math.round(cap * 2) / 2);
+  }
   return capacityFrom(parseISO(dateStr).getDay(), apptsOn(dateStr));
 }
 /* what a typical such weekday looks like — recurring commitments only,
@@ -2283,13 +2408,15 @@ function viewUebersicht() {
     const wks = workTasksOn(day).filter(w => w.hw.due !== day);
     const aps = apptsOn(day);
     const bits = [];
+    const dHol = holidayName(day);
+    if (dHol) bits.push({ c: 'var(--ok)', t: dHol });
     exs.forEach(e => bits.push({ c: subj(e.subjectId).color, t: (KINDS[e.kind] || KINDS.test).label + ' ' + subj(e.subjectId).short }));
     hws.forEach(x => bits.push({ c: subj(x.subjectId).color, t: 'HÜ ' + subj(x.subjectId).short }));
     wks.forEach(w => bits.push({ c: subj(w.hw.subjectId).color, t: subj(w.hw.subjectId).short }));
     sts.forEach(() => bits.push({ c: 'var(--ink-3)', t: 'Lernen' }));
     aps.forEach(a => bits.push({ c: (APPT_KINDS[a.kind] || APPT_KINDS.privat).color, t: a.title }));
 
-    h += '<div class="dash-day' + (isToday ? ' is-today' : '') + '" data-act="cal-jump" data-date="' + day + '" role="button" tabindex="0">' +
+    h += '<div class="dash-day' + (isToday ? ' is-today' : '') + (dHol ? ' is-holiday' : '') + '" data-act="cal-jump" data-date="' + day + '" role="button" tabindex="0">' +
       '<div class="dash-day-head"><span>' + WDS[dp.getDay()] + '</span><span class="dash-day-num">' + dp.getDate() + '</span></div>' +
       '<div class="dash-day-items">';
     if (bits.length) {
@@ -2336,6 +2463,15 @@ function viewHeute() {
       '<div class="tstat"><span class="tstat-n">' + openHw().length + '</span><span class="tstat-l">HÜs offen</span></div>' +
       '<div class="tstat"><span class="tstat-n">' + (next ? diffDays(t0, next.date) : '–') + '</span><span class="tstat-l">tage bis test</span></div>' +
     '</div></div>';
+
+  const todayHol = holidayName(t0);
+  if (todayHol) {
+    const todayHInfo = holidayInfo(t0);
+    h += '<div class="banner" style="background:var(--ok-soft);color:var(--ok)">' + I.info +
+      '<span><strong>' + esc(todayHol) + '</strong> — ' +
+      (todayHInfo.type === 'feiertag' ? 'gesetzlicher Feiertag' : 'schulfrei') +
+      '. Nutze den Tag zum Lernen oder Erholen!</span></div>';
+  }
 
   if (overdue.length) {
     h += '<div class="banner banner-alert">' + I.alert +
@@ -2401,6 +2537,8 @@ function viewHeute() {
     I.grid + 'Auslastung</button></span></div><div class="list">';
   nextWeek.forEach(g => {
     const bits = [];
+    const dayHol = holidayName(g.day);
+    if (dayHol) bits.push({ c: 'var(--ok)', t: dayHol });
     g.exs.forEach(e => bits.push({ c: subj(e.subjectId).color, t: (KINDS[e.kind] || KINDS.test).label + ' ' + subj(e.subjectId).short }));
     g.hws.forEach(x => bits.push({ c: subj(x.subjectId).color, t: 'HÜ ' + subj(x.subjectId).short }));
     g.wks.forEach(w => bits.push({ c: subj(w.hw.subjectId).color, t: 'arbeiten ' + subj(w.hw.subjectId).short }));
@@ -2451,6 +2589,13 @@ function eventsOn(date) {
   apptsOn(date).forEach(a => {
     out.push({ type: 'appt', color: (APPT_KINDS[a.kind] || APPT_KINDS.privat).color, label: a.title, item: a });
   });
+  /* Feiertage & Schulferien als eigenes Event (am Anfang einfügen) */
+  const hName = holidayName(date);
+  if (hName) {
+    const hInfo = holidayInfo(date);
+    out.unshift({ type: 'holiday', color: 'var(--ok)', label: hName,
+      item: { name: hName, type: hInfo.type } });
+  }
   return out;
 }
 
@@ -2510,17 +2655,20 @@ function viewKalender() {
     if (c === t0) cls.push('is-today');
     if (c === State.calSel) cls.push('is-sel');
     if ((wd === 0 || wd === 6) && !loadMode) cls.push('is-weekend');   // would out-specify lm-*
+    if (isSchoolFree(c) && !loadMode) cls.push('is-holiday');
     if (loadMode && inMonth && diffDays(t0, c) >= 0) cls.push('lm-' + st.key);
     const shown = evs.slice(0, 3);
+    const hol = holidayName(c);
     h += '<button class="' + cls.join(' ') + '" type="button" data-act="cal-pick" data-date="' + c + '" ' +
-      'aria-label="' + esc(fmtLong(c)) + ', ' + esc(st.label) + (evs.length ? ', ' + evs.length + ' Einträge' : '') + '">' +
+      'aria-label="' + esc(fmtLong(c)) + (hol ? ', ' + esc(hol) : '') + ', ' + esc(st.label) + (evs.length ? ', ' + evs.length + ' Einträge' : '') + '">' +
       '<span class="cal-daynum">' + parseISO(c).getDate() + '</span>' +
       (loadMode
         ? (inMonth && diffDays(t0, c) >= 0
             ? '<span class="cal-load-n">' + (load ? fmtUnits(load) : '–') +
               '<small>/' + fmtUnits(cap) + '</small></span>' : '')
         : shown.map(e => '<span class="cal-ev' + (e.type === 'study' || e.type === 'work' ? ' ev-study' : '') +
-            (e.type === 'appt' ? ' ev-appt' : '') + (e.done ? ' ev-done' : '') +
+            (e.type === 'appt' ? ' ev-appt' : '') + (e.type === 'holiday' ? ' ev-holiday' : '') +
+            (e.done ? ' ev-done' : '') +
             '" style="--ec:' + esc(e.color) + '">' + esc(e.label) + '</span>').join('') +
           (evs.length > 3 ? '<span class="cal-more">+' + (evs.length - 3) + '</span>' : '') +
           '<span class="cal-dots">' + evs.slice(0, 6).map(e =>
@@ -2540,6 +2688,7 @@ function viewKalender() {
     : '<span><span class="lg-sq" style="background:var(--accent)"></span>Abgabe / Test</span>' +
       '<span><span class="lg-sq hollow" style="border-color:var(--accent)"></span>Lern- &amp; Arbeitstag</span>' +
       '<span><span class="lg-sq" style="background:var(--ink-3);opacity:.45"></span>Termin</span>' +
+      '<span><span class="lg-sq" style="background:color-mix(in srgb,var(--ok) 18%,var(--surface));border:1px solid color-mix(in srgb,var(--ok) 30%,transparent)"></span>Feiertag / Ferien</span>' +
       '<span>Farbe = Fach</span>') + '</div>';
 
   /* selected-day panel */
@@ -2555,6 +2704,14 @@ function viewKalender() {
     '<span class="sec-action"><button class="btn btn-sm" type="button" data-act="new-hw" data-date="' + sel + '">' +
       I.plus + 'HÜ hier</button></span></div>';
 
+  const selHoliday = holidayName(sel);
+  if (selHoliday) {
+    const selHInfo = holidayInfo(sel);
+    h += '<div class="banner" style="margin-top:0;margin-bottom:12px;background:var(--ok-soft);color:var(--ok)">' + I.info +
+      '<span><strong>' + esc(selHoliday) + '</strong> — ' +
+      (selHInfo.type === 'feiertag' ? 'gesetzlicher Feiertag' : 'schulfrei') +
+      '. Der ganze Tag steht zum Lernen oder Erholen zur Verfügung.</span></div>';
+  }
   const hasExam = evs.some(e => e.type === 'exam');
   if (hasExam) {
     h += '<div class="banner banner-info" style="margin-top:0;margin-bottom:12px">' + I.info +
