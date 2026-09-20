@@ -209,7 +209,7 @@ input,select,textarea,button{font-family:inherit}
   background:var(--surface);border-top:1px solid var(--line);
   padding-bottom:env(safe-area-inset-bottom,0px);
 }
-.tabbar-inner{display:grid;grid-template-columns:repeat(5,1fr);height:var(--tabbar-h)}
+.tabbar-inner{display:grid;grid-template-columns:repeat(6,1fr);height:var(--tabbar-h)}
 .tab-btn{
   border:0;background:transparent;color:var(--ink-3);
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
@@ -374,6 +374,45 @@ input,select,textarea,button{font-family:inherit}
 .tstat.alert .tstat-n{color:var(--danger)}
 .tstat.warn .tstat-n{color:var(--warn)}
 .tstat.good .tstat-n{color:var(--ok)}
+
+/* dashboard greeting */
+.dash-greeting{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-xl);
+  padding:22px 24px;margin-bottom:16px;
+}
+.dash-hello{font-family:var(--font-display);font-size:26px;font-weight:700;line-height:1.2;letter-spacing:-.03em}
+.dash-sub{color:var(--ink-3);font-size:13.5px;margin-top:4px}
+.dash-date{display:inline-block;font-size:12px;font-weight:600;color:var(--ink-3);background:var(--surface-2);
+  border-radius:99px;padding:3px 12px;margin-top:10px;font-family:var(--font-mono);letter-spacing:.03em}
+
+/* dashboard stat cards */
+.dash-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.dash-stat{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
+  padding:14px 16px;display:flex;flex-direction:column;gap:2px;
+}
+.dash-stat-n{font-family:var(--font-display);font-size:28px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.dash-stat-l{font-size:11px;color:var(--ink-3);font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.dash-stat.alert .dash-stat-n{color:var(--danger)}
+.dash-stat.warn .dash-stat-n{color:var(--warn)}
+
+/* dashboard 7-day grid */
+.dash-week{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+.dash-day{
+  background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
+  padding:12px 10px;display:flex;flex-direction:column;gap:6px;min-height:100px;
+  cursor:pointer;transition:border-color .15s;
+}
+.dash-day:hover{border-color:var(--accent)}
+.dash-day.is-today{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.dash-day-head{font-size:12px;font-weight:600;color:var(--ink-3);text-transform:uppercase;letter-spacing:.04em;
+  display:flex;justify-content:space-between;align-items:center}
+.dash-day-num{font-family:var(--font-display);font-size:18px;font-weight:700}
+.dash-day.is-today .dash-day-num{color:var(--accent)}
+.dash-day-items{display:flex;flex-direction:column;gap:3px;flex:1}
+.dash-day-chip{font-size:10.5px;display:flex;align-items:center;gap:4px;line-height:1.3;color:var(--ink-2)}
+.dash-day-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.dash-day-empty{font-size:10.5px;color:var(--ink-4);font-style:italic}
 
 .banner{
   display:flex;gap:12px;align-items:flex-start;
@@ -870,6 +909,12 @@ input,select,textarea,button{font-family:inherit}
   .today-hero{padding:16px 17px;gap:16px}
   .today-stats{display:grid;grid-template-columns:1fr 1fr;gap:14px 10px;width:100%;margin-left:0}
   .tstat-n{font-size:22px}
+  .dash-hello{font-size:22px}
+  .dash-greeting{padding:18px 17px}
+  .dash-stats{grid-template-columns:1fr 1fr;gap:8px}
+  .dash-stat-n{font-size:24px}
+  .dash-week{grid-template-columns:repeat(3,1fr);gap:6px}
+  .dash-day{min-height:80px;padding:10px 8px}
   .cal-day{min-height:58px;padding:3px 2px 4px}
   .cal-ev{display:none}
   .cal-more{display:none}
@@ -884,7 +929,7 @@ input,select,textarea,button{font-family:inherit}
 @media (max-width:380px){
   .cal-wd{font-size:9.5px;padding:6px 1px}
   .cal-daynum{font-size:11.5px;width:19px}
-  .tab-btn{font-size:9.5px}
+  .tab-btn{font-size:9px;letter-spacing:0}
 }
 
 /* auth banner */
@@ -1025,6 +1070,7 @@ const I = {
   flame:    svg('<path d="M12 21c3.9 0 6.5-2.5 6.5-6 0-4.5-4.5-6-4-11-2.5 1-4.5 3.5-4.5 6 0 1.5.5 2.5.5 2.5S9 11 8 10c-1.5 1.5-2.5 3-2.5 5 0 3.5 2.6 6 6.5 6z"/>'),
   grid:     svg('<rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"/>'),
   clock:    svg('<circle cx="12" cy="12" r="9"/><path d="M12 7v5.2l3.2 1.9"/>'),
+  dash:     svg('<rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="4" rx="1.6"/><rect x="13" y="9" width="8" height="12" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/>'),
 };
 
 /* ============================================================
@@ -1858,7 +1904,7 @@ function deleteWithUndo(coll, id, label) {
 const WEIGHT_DRAFT = { steps: {}, topics: {} };
 
 const State = {
-  view: 'heute',
+  view: 'uebersicht',
   calMonth: today().slice(0, 7),
   calSel: today(),
   calMode: 'events',          // 'events' | 'load'
@@ -1871,6 +1917,7 @@ const State = {
 };
 
 const NAV = [
+  { id: 'uebersicht', label: 'Start',  icon: I.dash },
   { id: 'heute',    label: 'Heute',    icon: I.today },
   { id: 'kalender', label: 'Kalender', icon: I.calendar },
   { id: 'hue',      label: 'HÜs',      icon: I.book },
@@ -2026,6 +2073,87 @@ function emptyBox(title, sub) {
 /* ============================================================
    10. VIEW — HEUTE
    ============================================================ */
+function viewUebersicht() {
+  const t0 = today();
+  const d = parseISO(t0);
+  const hour = new Date().getHours();
+  const allHw = hwSorted();
+
+  /* greeting */
+  let greetWord, greetEmoji;
+  if (hour < 6)       { greetWord = 'Gute Nacht'; greetEmoji = '\u{1F319}'; }
+  else if (hour < 12) { greetWord = 'Guten Morgen'; greetEmoji = '\u{2600}\u{FE0F}'; }
+  else if (hour < 17) { greetWord = 'Guten Nachmittag'; greetEmoji = '\u{1F324}\u{FE0F}'; }
+  else if (hour < 21) { greetWord = 'Guten Abend'; greetEmoji = '\u{1F319}'; }
+  else                { greetWord = 'Gute Nacht'; greetEmoji = '\u{1F31F}'; }
+
+  const firstName = (Auth.user && Auth.user.displayName)
+    ? Auth.user.displayName.split(' ')[0]
+    : null;
+
+  const motivations = [
+    'Du schaffst das!', 'Ein Schritt nach dem anderen.', 'Bleib dran!',
+    'Heute wird ein guter Tag.', 'Weiter so!', 'Gib dein Bestes!',
+  ];
+  const motiv = motivations[d.getDate() % motivations.length];
+
+  let h = '<div class="dash-greeting">' +
+    '<div class="dash-hello">' + greetEmoji + ' ' + greetWord + (firstName ? ', ' + esc(firstName) : '') + '</div>' +
+    '<div class="dash-sub">' + esc(motiv) + '</div>' +
+    '<span class="dash-date">' + WD[d.getDay()] + ', ' + d.getDate() + '. ' + MON[d.getMonth()] + ' ' + d.getFullYear() + '</span>' +
+  '</div>';
+
+  /* 4 stat cards */
+  const dueToday = allHw.filter(x => !x.done && x.due === t0);
+  const next = upcoming()[0];
+  const daysToTest = next ? diffDays(t0, next.date) : null;
+  const openCount = openHw().length;
+  const overdue = allHw.filter(x => !x.done && x.due && diffDays(t0, x.due) < 0);
+
+  h += '<div class="dash-stats">' +
+    '<div class="dash-stat' + (dueToday.length ? ' alert' : '') + '"><span class="dash-stat-n">' + dueToday.length + '</span><span class="dash-stat-l">HÜs heute</span></div>' +
+    '<div class="dash-stat' + (daysToTest !== null && daysToTest <= 3 ? ' warn' : '') + '"><span class="dash-stat-n">' + (daysToTest !== null ? daysToTest : '–') + '</span><span class="dash-stat-l">Tage bis Test</span></div>' +
+    '<div class="dash-stat"><span class="dash-stat-n">' + openCount + '</span><span class="dash-stat-l">HÜs offen</span></div>' +
+    '<div class="dash-stat' + (overdue.length ? ' alert' : '') + '"><span class="dash-stat-n">' + overdue.length + '</span><span class="dash-stat-l">Überfällig</span></div>' +
+  '</div>';
+
+  /* 7-day card grid */
+  h += '<div class="sec"><div class="sec-head"><span class="sec-title">Deine Woche</span></div>';
+  h += '<div class="dash-week">';
+  for (let i = 0; i < 7; i++) {
+    const day = addDays(t0, i);
+    const dp = parseISO(day);
+    const isToday = day === t0;
+    const hws = allHw.filter(x => !x.done && x.due === day);
+    const exs = upcoming().filter(x => x.date === day);
+    const sts = studyTasksOn(day);
+    const wks = workTasksOn(day).filter(w => w.hw.due !== day);
+    const aps = apptsOn(day);
+    const bits = [];
+    exs.forEach(e => bits.push({ c: subj(e.subjectId).color, t: (KINDS[e.kind] || KINDS.test).label + ' ' + subj(e.subjectId).short }));
+    hws.forEach(x => bits.push({ c: subj(x.subjectId).color, t: 'HÜ ' + subj(x.subjectId).short }));
+    wks.forEach(w => bits.push({ c: subj(w.hw.subjectId).color, t: subj(w.hw.subjectId).short }));
+    sts.forEach(() => bits.push({ c: 'var(--ink-3)', t: 'Lernen' }));
+    aps.forEach(a => bits.push({ c: (APPT_KINDS[a.kind] || APPT_KINDS.privat).color, t: a.title }));
+
+    h += '<div class="dash-day' + (isToday ? ' is-today' : '') + '" data-act="cal-jump" data-date="' + day + '" role="button" tabindex="0">' +
+      '<div class="dash-day-head"><span>' + WDS[dp.getDay()] + '</span><span class="dash-day-num">' + dp.getDate() + '</span></div>' +
+      '<div class="dash-day-items">';
+    if (bits.length) {
+      bits.slice(0, 4).forEach(b => {
+        h += '<div class="dash-day-chip"><span class="dash-day-dot" style="background:' + esc(b.c) + '"></span>' + esc(b.t) + '</div>';
+      });
+      if (bits.length > 4) h += '<div class="dash-day-chip" style="color:var(--ink-4)">+' + (bits.length - 4) + ' mehr</div>';
+    } else {
+      h += '<div class="dash-day-empty">frei</div>';
+    }
+    h += '</div></div>';
+  }
+  h += '</div></div>';
+
+  return h;
+}
+
 function viewHeute() {
   const t0 = today();
   const d = parseISO(t0);
@@ -2692,9 +2820,10 @@ function render() {
       '<div class="skel" style="height:54px;opacity:.4"></div>';
     return;
   }
-  if (!subjectsSorted().length && State.view !== 'mehr') { v.innerHTML = viewOnboarding(); if (sc) sc.scrollTop = 0; return; }
+  if (!subjectsSorted().length && State.view !== 'mehr' && State.view !== 'uebersicht') { v.innerHTML = viewOnboarding(); if (sc) sc.scrollTop = 0; return; }
 
-  v.innerHTML = State.view === 'kalender' ? viewKalender()
+  v.innerHTML = State.view === 'uebersicht' ? viewUebersicht()
+              : State.view === 'kalender' ? viewKalender()
               : State.view === 'hue'      ? viewHue()
               : State.view === 'tests'    ? viewTests()
               : State.view === 'mehr'     ? viewMehr()
