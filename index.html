@@ -1377,11 +1377,111 @@ function buildHolidayMap(year) {
   return map;
 }
 
-/* Haupt-API: gibt { name, type } zurück oder null */
+/* ---- WebUntis-Integration ---- */
+const UNTIS_KEY = 'schulmappe.untis';
+const UNTIS_HOLIDAYS_KEY = 'schulmappe.untis.holidays';
+let _untisHolidays = null; // cached parsed holidays from Untis
+
+function loadUntisConfig() {
+  try { return JSON.parse(localStorage.getItem(UNTIS_KEY)) || {}; } catch (e) { return {}; }
+}
+function saveUntisConfig(cfg) {
+  try { localStorage.setItem(UNTIS_KEY, JSON.stringify(cfg)); } catch (e) {}
+}
+function loadUntisHolidays() {
+  if (_untisHolidays) return _untisHolidays;
+  try {
+    _untisHolidays = JSON.parse(localStorage.getItem(UNTIS_HOLIDAYS_KEY)) || [];
+  } catch (e) { _untisHolidays = []; }
+  return _untisHolidays;
+}
+function saveUntisHolidays(list) {
+  _untisHolidays = list;
+  try { localStorage.setItem(UNTIS_HOLIDAYS_KEY, JSON.stringify(list)); } catch (e) {}
+}
+
+/* WebUntis JSON-RPC Aufruf */
+async function untisRPC(server, school, method, params, sessionId) {
+  const url = 'https://' + server + '/WebUntis/jsonrpc.do?school=' + encodeURIComponent(school);
+  const headers = { 'Content-Type': 'application/json' };
+  if (sessionId) headers['Cookie'] = 'JSESSIONID=' + sessionId;
+  const body = { id: Date.now().toString(), method, jsonrpc: '2.0' };
+  if (params) body.params = params;
+  const resp = await fetch(url, {
+    method: 'POST', headers, body: JSON.stringify(body),
+    credentials: sessionId ? 'include' : 'omit'
+  });
+  if (!resp.ok) throw new Error('HTTP ' + resp.status);
+  const data = await resp.json();
+  if (data.error) throw new Error(data.error.message || 'Untis-Fehler');
+  return data.result;
+}
+
+/* Untis-Datum "20261026" → "2026-10-26" */
+function untisDateToISO(d) {
+  const s = String(d);
+  return s.slice(0, 4) + '-' + s.slice(4, 6) + '-' + s.slice(6, 8);
+}
+
+/* Sync: einloggen, Ferien abrufen, ausloggen */
+async function syncUntisHolidays() {
+  const cfg = loadUntisConfig();
+  if (!cfg.server || !cfg.school || !cfg.user || !cfg.pass) {
+    throw new Error('Bitte Server, Schule, Username und Passwort ausfüllen.');
+  }
+  /* Authenticate */
+  const auth = await untisRPC(cfg.server, cfg.school, 'authenticate', {
+    user: cfg.user, password: cfg.pass, client: 'Lernio'
+  });
+  const sid = auth.sessionId;
+  try {
+    /* Fetch holidays */
+    const raw = await untisRPC(cfg.server, cfg.school, 'getHolidays', null, sid);
+    const holidays = (raw || []).map(h => ({
+      name: h.longName || h.name,
+      startDate: untisDateToISO(h.startDate),
+      endDate: untisDateToISO(h.endDate)
+    }));
+    saveUntisHolidays(holidays);
+    /* Save last sync time */
+    cfg.lastSync = new Date().toISOString();
+    saveUntisConfig(cfg);
+  } finally {
+    /* Always logout */
+    try { await untisRPC(cfg.server, cfg.school, 'logout', null, sid); } catch (e) {}
+  }
+  return loadUntisHolidays();
+}
+
+/* Untis-Holidays als Map: dateStr → { name, type: 'ferien' } */
+function untisHolidayMap() {
+  const list = loadUntisHolidays();
+  const map = {};
+  list.forEach(h => {
+    let cur = parseISO(h.startDate);
+    const end = parseISO(h.endDate);
+    while (cur <= end) {
+      const key = isoOf(cur);
+      map[key] = { name: h.name, type: 'ferien' };
+      cur.setDate(cur.getDate() + 1);
+    }
+  });
+  return map;
+}
+
+/* Haupt-API: gibt { name, type } zurück oder null
+   Untis-Daten haben Vorrang vor berechneten Ferien,
+   berechnete Feiertage haben Vorrang über Ferien. */
 function holidayInfo(dateStr) {
   const y = parseISO(dateStr).getFullYear();
-  const m = buildHolidayMap(y);
-  return m[dateStr] || null;
+  const calc = buildHolidayMap(y);
+  /* Berechnete Feiertage (gesetzlich) haben immer Vorrang */
+  if (calc[dateStr] && calc[dateStr].type === 'feiertag') return calc[dateStr];
+  /* Untis-Daten haben Vorrang für Ferien */
+  const untis = untisHolidayMap();
+  if (untis[dateStr]) return untis[dateStr];
+  /* Fallback: berechnete Ferien */
+  return calc[dateStr] || null;
 }
 
 function isHoliday(dateStr) {
@@ -3063,6 +3163,44 @@ function viewMehr() {
       'wöchentliche Termine sind schon abgezogen.</p>' +
     '</div></div>';
 
+  /* --- WebUntis --- */
+  {
+    const uc = loadUntisConfig();
+    const uh = loadUntisHolidays();
+    h += '<div class="sec"><div class="sec-head"><span class="sec-title">WebUntis</span></div>' +
+      '<div class="card card-pad">' +
+      '<p style="font-size:13.5px;color:var(--ink-2);line-height:1.55;margin-bottom:13px">' +
+        'Verbinde dich mit WebUntis, um Ferien und schulfreie Tage automatisch zu laden. ' +
+        'Deine Zugangsdaten bleiben lokal auf diesem Gerät.</p>' +
+      '<div style="display:flex;flex-direction:column;gap:10px">' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+          '<input class="input" id="untis-server" type="text" placeholder="Server (z.B. neilo.webuntis.com)" value="' + esc(uc.server || '') + '" style="flex:1;min-width:180px">' +
+          '<input class="input" id="untis-school" type="text" placeholder="Schule (z.B. htl-villach)" value="' + esc(uc.school || '') + '" style="flex:1;min-width:140px">' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+          '<input class="input" id="untis-user" type="text" placeholder="Benutzername" value="' + esc(uc.user || '') + '" style="flex:1;min-width:140px">' +
+          '<input class="input" id="untis-pass" type="password" placeholder="Passwort" value="' + esc(uc.pass || '') + '" style="flex:1;min-width:140px">' +
+        '</div>' +
+      '</div>' +
+      '<div style="display:flex;align-items:center;gap:10px;margin-top:13px;flex-wrap:wrap">' +
+        '<button class="btn btn-primary" type="button" data-act="untis-sync">' + I.download + ' Ferien laden</button>' +
+        '<span id="untis-status" style="font-size:12.5px;color:var(--ink-3)">' +
+          (uc.lastSync ? 'Zuletzt: ' + new Date(uc.lastSync).toLocaleDateString('de-AT') + ' — ' + uh.length + ' Ferien geladen'
+            : 'Noch nicht verbunden') +
+        '</span>' +
+      '</div>';
+    if (uh.length) {
+      h += '<div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:5px">' +
+        uh.map(f => '<span class="chip" style="font-size:11.5px"><span class="chip-dot" style="background:var(--ok)"></span>' +
+          esc(f.name) + ' <span class="num" style="font-size:10px">' +
+          parseISO(f.startDate).getDate() + '.' + (parseISO(f.startDate).getMonth() + 1) + '.–' +
+          parseISO(f.endDate).getDate() + '.' + (parseISO(f.endDate).getMonth() + 1) + '.' +
+          '</span></span>').join('') +
+        '</div>';
+    }
+    h += '</div></div>';
+  }
+
   /* --- appointments --- */
   const aps = apptsSorted();
   h += '<div class="sec"><div class="sec-head"><span class="sec-title">Feste Termine</span>' +
@@ -4219,6 +4357,35 @@ document.addEventListener('click', ev => {
       Store.saveSettings({ hwReminder: !Store.settings.hwReminder }); return;
 
     /* --- design / palette --- */
+    case 'untis-sync': {
+      /* Untis-Credentials aus den Feldern lesen und speichern */
+      const cfg = loadUntisConfig();
+      const sv = document.getElementById('untis-server');
+      const sc = document.getElementById('untis-school');
+      const su = document.getElementById('untis-user');
+      const sp = document.getElementById('untis-pass');
+      if (sv) cfg.server = sv.value.trim();
+      if (sc) cfg.school = sc.value.trim();
+      if (su) cfg.user = su.value.trim();
+      if (sp) cfg.pass = sp.value;
+      saveUntisConfig(cfg);
+      const status = document.getElementById('untis-status');
+      if (status) status.textContent = 'Verbinde…';
+      el.disabled = true;
+      syncUntisHolidays().then(h => {
+        _holidayMaps = {}; // Cache zurücksetzen
+        toast(h.length + ' Ferien von Untis geladen');
+        rerender();
+      }).catch(err => {
+        console.error('Untis sync failed:', err);
+        if (status) status.textContent = 'Fehler: ' + (err.message || 'Verbindung fehlgeschlagen');
+        if (err.message && err.message.includes('Failed to fetch')) {
+          if (status) status.textContent = 'Verbindung blockiert (CORS) — probiere einen anderen Server';
+        }
+        el.disabled = false;
+      });
+      return;
+    }
     case 'set-palette': {
       applyPalette(el.dataset.pid);
       toast(PALETTES.find(p => p.id === el.dataset.pid)?.name || el.dataset.pid);
