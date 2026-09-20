@@ -1401,20 +1401,43 @@ function saveUntisHolidays(list) {
 }
 
 /* WebUntis JSON-RPC Aufruf */
+function sanitizeUntisServer(raw) {
+  let s = raw.trim();
+  s = s.replace(/^https?:\/\//i, '');
+  s = s.replace(/\/+$/, '');
+  /* Falls nur "webuntis.com" eingegeben → Hinweis */
+  if (s === 'webuntis.com' || s === 'www.webuntis.com') {
+    throw new Error('Bitte den vollständigen Server eingeben, z.B. neilo.webuntis.com — du findest ihn auf webuntis.com wenn du deine Schule suchst.');
+  }
+  return s;
+}
+
+const CORS_PROXIES = [
+  u => 'https://corsproxy.io/?' + encodeURIComponent(u),
+  u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u)
+];
 async function untisRPC(server, school, method, params, sessionId) {
-  const url = 'https://' + server + '/WebUntis/jsonrpc.do?school=' + encodeURIComponent(school);
-  const headers = { 'Content-Type': 'application/json' };
-  if (sessionId) headers['Cookie'] = 'JSESSIONID=' + sessionId;
+  let path = '/WebUntis/jsonrpc.do';
+  /* Session-ID als URL-Parameter (Java-Servlet-Stil), da Cookie-Header nicht cross-origin geht */
+  if (sessionId) path += ';jsessionid=' + sessionId;
+  const target = 'https://' + server + path + '?school=' + encodeURIComponent(school);
   const body = { id: Date.now().toString(), method, jsonrpc: '2.0' };
   if (params) body.params = params;
-  const resp = await fetch(url, {
-    method: 'POST', headers, body: JSON.stringify(body),
-    credentials: sessionId ? 'include' : 'omit'
-  });
-  if (!resp.ok) throw new Error('HTTP ' + resp.status);
-  const data = await resp.json();
-  if (data.error) throw new Error(data.error.message || 'Untis-Fehler');
-  return data.result;
+  let lastErr;
+  for (const mkProxy of CORS_PROXIES) {
+    try {
+      const resp = await fetch(mkProxy(target), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status + ' — prüfe Server und Schulname');
+      const data = await resp.json();
+      if (data.error) throw new Error(data.error.message || 'Untis-Fehler');
+      return data.result;
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr;
 }
 
 /* Untis-Datum "20261026" → "2026-10-26" */
@@ -1429,14 +1452,18 @@ async function syncUntisHolidays() {
   if (!cfg.server || !cfg.school || !cfg.user || !cfg.pass) {
     throw new Error('Bitte Server, Schule, Username und Passwort ausfüllen.');
   }
+  /* Server-Eingabe bereinigen */
+  const cleanServer = sanitizeUntisServer(cfg.server);
+  cfg.server = cleanServer;
+  saveUntisConfig(cfg);
   /* Authenticate */
-  const auth = await untisRPC(cfg.server, cfg.school, 'authenticate', {
+  const auth = await untisRPC(cleanServer, cfg.school, 'authenticate', {
     user: cfg.user, password: cfg.pass, client: 'Lernio'
   });
   const sid = auth.sessionId;
   try {
     /* Fetch holidays */
-    const raw = await untisRPC(cfg.server, cfg.school, 'getHolidays', null, sid);
+    const raw = await untisRPC(cleanServer, cfg.school, 'getHolidays', null, sid);
     const holidays = (raw || []).map(h => ({
       name: h.longName || h.name,
       startDate: untisDateToISO(h.startDate),
@@ -1448,7 +1475,7 @@ async function syncUntisHolidays() {
     saveUntisConfig(cfg);
   } finally {
     /* Always logout */
-    try { await untisRPC(cfg.server, cfg.school, 'logout', null, sid); } catch (e) {}
+    try { await untisRPC(cleanServer, cfg.school, 'logout', null, sid); } catch (e) {}
   }
   return loadUntisHolidays();
 }
@@ -4378,10 +4405,15 @@ document.addEventListener('click', ev => {
         rerender();
       }).catch(err => {
         console.error('Untis sync failed:', err);
-        if (status) status.textContent = 'Fehler: ' + (err.message || 'Verbindung fehlgeschlagen');
-        if (err.message && err.message.includes('Failed to fetch')) {
-          if (status) status.textContent = 'Verbindung blockiert (CORS) — probiere einen anderen Server';
+        let msg = err.message || 'Verbindung fehlgeschlagen';
+        if (msg.includes('NetworkError') || msg.includes('Failed to fetch')) {
+          msg = 'Verbindung fehlgeschlagen — prüfe Servername und Internetverbindung';
+        } else if (msg.includes('bad credentials') || msg.includes('wrong')) {
+          msg = 'Falscher Username oder Passwort';
         }
+        if (status) status.textContent = 'Fehler: ' + msg;
+        /* Server-Feld aktualisieren falls bereinigt */
+        if (sv) { const c = loadUntisConfig(); sv.value = c.server || ''; }
         el.disabled = false;
       });
       return;
