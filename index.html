@@ -921,7 +921,7 @@ input,select,textarea,button{font-family:inherit}
       </span>
       <span>
         <span class="brand-name">Lernio</span>
-        <span class="brand-sub" id="brand-sub">3AHITM</span>
+        <span class="brand-sub" id="brand-sub"></span>
       </span>
     </div>
     <div id="auth-bar"></div>
@@ -1116,17 +1116,17 @@ const KINDS = {
   abgabe:      { label: 'Abgabe',      hint: 'Projekt, Referat, Protokoll', lead: 5, icsTag: 'Abgabe' },
 };
 
-/* subject suggestions tuned for an HTL Informationstechnik year */
+/* subject suggestions — common Austrian school subjects */
 const SEED_SUBJECTS = [
-  ['Deutsch', 'D'], ['Englisch', 'E'], ['Angewandte Mathematik', 'AM'],
-  ['Programmieren', 'POS'], ['Datenbanken', 'DBI'], ['Netzwerktechnik', 'NWT'],
-  ['Systemtechnik', 'SYT'], ['Medientechnik', 'MET'], ['Elektronik', 'ELE'],
-  ['Chemie', 'CH'], ['Physik', 'PH'], ['Wirtschaft und Recht', 'WIR'],
-  ['Geschichte', 'GGP'], ['Religion / Ethik', 'REL'], ['Bewegung und Sport', 'BSP'],
+  ['Deutsch', 'D'], ['Englisch', 'E'], ['Mathematik', 'M'],
+  ['Geschichte', 'GSK'], ['Geographie', 'GW'], ['Biologie', 'BIO'],
+  ['Physik', 'PH'], ['Chemie', 'CH'], ['Informatik', 'INF'],
+  ['Musik', 'MU'], ['Bildnerische Erziehung', 'BE'], ['Religion / Ethik', 'REL'],
+  ['Bewegung und Sport', 'BSP'],
 ];
 
 const DEFAULTS = {
-  reminderTime: '16:00', hwReminder: true, seq: 0, className: '3AHITM',
+  reminderTime: '16:00', hwReminder: true, seq: 0, className: '',
   /* school hours per weekday, Mon–Fri; 0 means a free day */
   schedule: { 1: 8, 2: 8, 3: 8, 4: 8, 5: 6 },
 };
@@ -2648,10 +2648,6 @@ function viewMehr() {
       '<div class="set-desc">Steht oben in der Seitenleiste.</div></div>' +
       '<div class="set-ctl"><input class="input" id="set-class" type="text" value="' + esc(Store.settings.className || '') +
         '" style="width:120px" maxlength="12" data-act="set-class"></div></div>' +
-    '<div class="set-row"><div class="set-info"><div class="set-name">Speicherort</div>' +
-      '<div class="set-desc">' + (Store.mode === 'db'
-        ? 'In deinem Claude-Konto — Laptop und Handy zeigen dasselbe.'
-        : 'Nur in diesem Browser. Auf einem anderen Gerät siehst du die Einträge nicht.') + '</div></div></div>' +
     '</div></div>';
 
   return h;

@@ -5,7 +5,7 @@
 */
 /* bump this on every deploy that changes index.html so phones actually
    pick up the update instead of serving a stale cached shell */
-const CACHE = 'lernio-v4';
+const CACHE = 'lernio-v5';
 const SHELL = [
   './',
   './index.html',
