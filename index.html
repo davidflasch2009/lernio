@@ -1413,14 +1413,14 @@ function sanitizeUntisServer(raw) {
   return s;
 }
 
-/* CORS-Proxies — mehrere Fallbacks, weil einzelne oft down oder rate-limited sind.
-   Erster Eintrag = direkter Versuch (klappt, falls die Schule CORS erlaubt). */
+/* CORS-Proxies — Stand 2026. corsproxy.io ist tot für gehostete Apps
+   (nur noch localhost), proxy.cors.sh + thingproxy komplett offline.
+   Diese hier funktionieren mit POST: */
 const CORS_PROXIES = [
-  u => u,                                                          /* direkt (selten, aber gratis wenn's geht) */
+  u => u,                                                          /* direkt (klappt nur wenn Schule CORS erlaubt) */
   u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
-  u => 'https://corsproxy.io/?' + encodeURIComponent(u),
-  u => 'https://cors.eu.org/' + u,
-  u => 'https://proxy.cors.sh/' + u
+  u => 'https://cors.x2u.in/' + u,
+  u => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(u)
 ];
 
 /* Untis-typische API-Fehler, die NICHT durch Proxy-Wechsel gelöst werden. */
@@ -3284,6 +3284,7 @@ function viewMehr() {
       '<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">' +
         '<input class="input" id="untis-search" type="text" placeholder="Schule suchen (z.B. HTL Villach)" style="flex:1;min-width:180px">' +
         '<button class="btn" type="button" data-act="untis-school-search">Suchen</button>' +
+        '<button class="btn" type="button" data-act="untis-preset-htlvi" title="HTL Villach direkt eintragen">HTL Villach</button>' +
       '</div>' +
       '<div id="untis-search-results" style="margin-bottom:10px"></div>' +
       '<div style="display:flex;flex-direction:column;gap:10px">' +
@@ -4471,6 +4472,21 @@ document.addEventListener('click', ev => {
       Store.saveSettings({ hwReminder: !Store.settings.hwReminder }); return;
 
     /* --- WebUntis Schulsuche --- */
+    case 'untis-preset-htlvi': {
+      const sv = document.getElementById('untis-server');
+      const sc = document.getElementById('untis-school');
+      /* HTL Villach hat eine eigene WebUntis-Subdomain; der interne
+         Schulname ist htblva_villach (steht auf der IT-Services-Seite). */
+      if (sv) sv.value = 'htl-villach.webuntis.com';
+      if (sc) sc.value = 'htblva_villach';
+      const cfg = loadUntisConfig();
+      cfg.server = 'htl-villach.webuntis.com';
+      cfg.school = 'htblva_villach';
+      saveUntisConfig(cfg);
+      const results = document.getElementById('untis-search-results');
+      if (results) results.innerHTML = '<div style="font-size:12.5px;color:var(--ok);padding:4px 0">✓ HTL Villach eingetragen. Jetzt Login-Daten unten eingeben und "Ferien laden" drücken.</div>';
+      return;
+    }
     case 'untis-school-search': {
       const q = (document.getElementById('untis-search') || {}).value || '';
       const results = document.getElementById('untis-search-results');
