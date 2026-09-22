@@ -269,7 +269,7 @@
    BASE
    ============================================================ */
 *,*::before,*::after{box-sizing:border-box}
-html,body{height:100%}
+html,body{height:100%;height:100dvh}
 body{
   margin:0;
   background:var(--bg);
@@ -279,6 +279,7 @@ body{
   line-height:1.5;
   -webkit-font-smoothing:antialiased;
   overflow:hidden;
+  overscroll-behavior-y:none;
 }
 h1,h2,h3,h4{margin:0;font-family:var(--font-display);text-wrap:balance;letter-spacing:-.015em}
 p{margin:0}
@@ -292,7 +293,7 @@ input,select,textarea,button{font-family:inherit}
 /* ============================================================
    APP SHELL
    ============================================================ */
-#app{display:flex;height:100%;overflow:hidden}
+#app{display:flex;height:100%;height:100dvh;overflow:hidden}
 
 /* --- Sidebar (desktop) --- */
 #sidebar{
@@ -338,7 +339,7 @@ input,select,textarea,button{font-family:inherit}
 .side-note{font-size:11.5px;color:var(--ink-3);line-height:1.45}
 
 /* --- Main column --- */
-#main{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+#main{flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;overflow:hidden}
 
 #topbar{
   display:none;
@@ -350,7 +351,7 @@ input,select,textarea,button{font-family:inherit}
 #topbar .brand{padding:0}
 #topbar-actions{margin-left:auto;display:flex;gap:6px}
 
-#scroll{flex:1;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+#scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y}
 #view{max-width:900px;margin:0 auto;padding:26px 24px 96px}
 
 /* --- Bottom tabs (mobile) --- */
@@ -1056,8 +1057,8 @@ input,select,textarea,button{font-family:inherit}
   #sidebar{display:none}
   #topbar{display:flex}
   #tabbar{display:block}
-  #view{padding:18px 16px 26px;max-width:none}
-  #scroll{padding-bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom,0px))}
+  #view{padding:18px 16px 26px;max-width:none;min-height:calc(100dvh - 100px)}
+  #scroll{padding-bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom,0px) + 8px);-webkit-overflow-scrolling:touch;touch-action:pan-y}
   #fab{bottom:calc(var(--tabbar-h) + 16px + env(safe-area-inset-bottom,0px));right:16px;width:50px;height:50px;border-radius:16px}
   .page-title{font-size:25px}
   .today-daynum{font-size:38px}
@@ -1412,10 +1413,25 @@ function sanitizeUntisServer(raw) {
   return s;
 }
 
+/* CORS-Proxies — mehrere Fallbacks, weil einzelne oft down oder rate-limited sind.
+   Erster Eintrag = direkter Versuch (klappt, falls die Schule CORS erlaubt). */
 const CORS_PROXIES = [
+  u => u,                                                          /* direkt (selten, aber gratis wenn's geht) */
+  u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
   u => 'https://corsproxy.io/?' + encodeURIComponent(u),
-  u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u)
+  u => 'https://cors.eu.org/' + u,
+  u => 'https://proxy.cors.sh/' + u
 ];
+
+/* Untis-typische API-Fehler, die NICHT durch Proxy-Wechsel gelöst werden. */
+function isPermanentUntisError(msg) {
+  if (!msg) return false;
+  const m = msg.toLowerCase();
+  return m.includes('bad credentials') || m.includes('wrong') ||
+         m.includes('no user') || m.includes('invalid') ||
+         m.includes('not authenticated') || m.includes('too many');
+}
+
 async function untisRPC(server, school, method, params, sessionId) {
   let path = '/WebUntis/jsonrpc.do';
   /* Session-ID als URL-Parameter (Java-Servlet-Stil), da Cookie-Header nicht cross-origin geht */
@@ -1423,21 +1439,87 @@ async function untisRPC(server, school, method, params, sessionId) {
   const target = 'https://' + server + path + '?school=' + encodeURIComponent(school);
   const body = { id: Date.now().toString(), method, jsonrpc: '2.0' };
   if (params) body.params = params;
+  const bodyStr = JSON.stringify(body);
+
   let lastErr;
-  for (const mkProxy of CORS_PROXIES) {
+  for (let i = 0; i < CORS_PROXIES.length; i++) {
+    const mkProxy = CORS_PROXIES[i];
     try {
       const resp = await fetch(mkProxy(target), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body: bodyStr,
+        mode: 'cors'
       });
-      if (!resp.ok) throw new Error('HTTP ' + resp.status + ' — prüfe Server und Schulname');
-      const data = await resp.json();
-      if (data.error) throw new Error(data.error.message || 'Untis-Fehler');
+      if (!resp.ok) {
+        /* 4xx/5xx vom Proxy → nächsten probieren */
+        lastErr = new Error('HTTP ' + resp.status + ' (Proxy ' + (i + 1) + ')');
+        continue;
+      }
+      const text = await resp.text();
+      /* Proxy hat evtl. HTML-Fehlerseite geliefert */
+      if (!text || text.trim().charAt(0) !== '{') {
+        lastErr = new Error('Ungültige Antwort vom Proxy ' + (i + 1));
+        continue;
+      }
+      let data;
+      try { data = JSON.parse(text); }
+      catch (parseErr) {
+        lastErr = new Error('JSON-Parsefehler vom Proxy ' + (i + 1));
+        continue;
+      }
+      if (data.error) {
+        const msg = data.error.message || 'Untis-Fehler';
+        const err = new Error(msg);
+        /* Echter Untis-API-Fehler → sofort abbrechen, andere Proxies helfen nicht */
+        if (isPermanentUntisError(msg)) throw err;
+        lastErr = err;
+        continue;
+      }
       return data.result;
+    } catch (e) {
+      if (isPermanentUntisError(e.message)) throw e;
+      lastErr = e;
+    }
+  }
+  throw lastErr || new Error('Alle Proxies fehlgeschlagen');
+}
+
+/* Schulsuche über den öffentlichen WebUntis-Endpoint (mobile).
+   Liefert Array von { server, loginName, displayName, address }. */
+async function untisSearchSchool(query) {
+  const target = 'https://mobile.webuntis.com/ms/schoolquery2';
+  const body = {
+    id: 'wu-search-' + Date.now(),
+    method: 'searchSchool',
+    params: [{ search: query }],
+    jsonrpc: '2.0'
+  };
+  const bodyStr = JSON.stringify(body);
+  let lastErr;
+  for (let i = 0; i < CORS_PROXIES.length; i++) {
+    try {
+      const resp = await fetch(CORS_PROXIES[i](target), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: bodyStr,
+        mode: 'cors'
+      });
+      if (!resp.ok) { lastErr = new Error('HTTP ' + resp.status); continue; }
+      const text = await resp.text();
+      if (!text || text.trim().charAt(0) !== '{') { lastErr = new Error('Ungültige Antwort'); continue; }
+      const data = JSON.parse(text);
+      if (data.error) { lastErr = new Error(data.error.message || 'Suche fehlgeschlagen'); continue; }
+      const schools = (data.result && data.result.schools) || [];
+      return schools.map(s => ({
+        server: (s.server || '').replace(/^https?:\/\//, '').replace(/\/+$/, ''),
+        loginName: s.loginName || '',
+        displayName: s.displayName || s.loginName || '',
+        address: s.address || ''
+      })).filter(s => s.server && s.loginName);
     } catch (e) { lastErr = e; }
   }
-  throw lastErr;
+  throw lastErr || new Error('Schulsuche fehlgeschlagen');
 }
 
 /* Untis-Datum "20261026" → "2026-10-26" */
@@ -3199,19 +3281,24 @@ function viewMehr() {
       '<p style="font-size:13.5px;color:var(--ink-2);line-height:1.55;margin-bottom:13px">' +
         'Verbinde dich mit WebUntis, um Ferien und schulfreie Tage automatisch zu laden. ' +
         'Deine Zugangsdaten bleiben lokal auf diesem Gerät.</p>' +
+      '<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">' +
+        '<input class="input" id="untis-search" type="text" placeholder="Schule suchen (z.B. HTL Villach)" style="flex:1;min-width:180px">' +
+        '<button class="btn" type="button" data-act="untis-school-search">Suchen</button>' +
+      '</div>' +
+      '<div id="untis-search-results" style="margin-bottom:10px"></div>' +
       '<div style="display:flex;flex-direction:column;gap:10px">' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
           '<input class="input" id="untis-server" type="text" placeholder="Server (z.B. neilo.webuntis.com)" value="' + esc(uc.server || '') + '" style="flex:1;min-width:180px">' +
           '<input class="input" id="untis-school" type="text" placeholder="Schule (z.B. htl-villach)" value="' + esc(uc.school || '') + '" style="flex:1;min-width:140px">' +
         '</div>' +
         '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
-          '<input class="input" id="untis-user" type="text" placeholder="Benutzername" value="' + esc(uc.user || '') + '" style="flex:1;min-width:140px">' +
-          '<input class="input" id="untis-pass" type="password" placeholder="Passwort" value="' + esc(uc.pass || '') + '" style="flex:1;min-width:140px">' +
+          '<input class="input" id="untis-user" type="text" placeholder="Benutzername" value="' + esc(uc.user || '') + '" style="flex:1;min-width:140px" autocomplete="username">' +
+          '<input class="input" id="untis-pass" type="password" placeholder="Passwort" value="' + esc(uc.pass || '') + '" style="flex:1;min-width:140px" autocomplete="current-password">' +
         '</div>' +
       '</div>' +
       '<div style="display:flex;align-items:center;gap:10px;margin-top:13px;flex-wrap:wrap">' +
         '<button class="btn btn-primary" type="button" data-act="untis-sync">' + I.download + ' Ferien laden</button>' +
-        '<span id="untis-status" style="font-size:12.5px;color:var(--ink-3)">' +
+        '<span id="untis-status" style="font-size:12.5px;color:var(--ink-3);flex:1;min-width:0;line-height:1.4">' +
           (uc.lastSync ? 'Zuletzt: ' + new Date(uc.lastSync).toLocaleDateString('de-AT') + ' — ' + uh.length + ' Ferien geladen'
             : 'Noch nicht verbunden') +
         '</span>' +
@@ -4383,6 +4470,54 @@ document.addEventListener('click', ev => {
     case 'toggle-hwrem':
       Store.saveSettings({ hwReminder: !Store.settings.hwReminder }); return;
 
+    /* --- WebUntis Schulsuche --- */
+    case 'untis-school-search': {
+      const q = (document.getElementById('untis-search') || {}).value || '';
+      const results = document.getElementById('untis-search-results');
+      if (!q.trim()) {
+        if (results) results.innerHTML = '<div style="font-size:12.5px;color:var(--ink-3);padding:4px 0">Bitte Schulnamen eingeben.</div>';
+        return;
+      }
+      if (results) results.innerHTML = '<div style="font-size:12.5px;color:var(--ink-3);padding:4px 0">Suche läuft…</div>';
+      el.disabled = true;
+      untisSearchSchool(q.trim()).then(list => {
+        el.disabled = false;
+        if (!list.length) {
+          results.innerHTML = '<div style="font-size:12.5px;color:var(--ink-3);padding:4px 0">Keine Schule gefunden.</div>';
+          return;
+        }
+        results.innerHTML = list.slice(0, 8).map((s, i) =>
+          '<button type="button" class="btn btn-sm" data-act="untis-pick-school" data-i="' + i + '" ' +
+          'style="display:block;width:100%;text-align:left;margin-bottom:6px;white-space:normal;line-height:1.35">' +
+          '<strong>' + esc(s.displayName) + '</strong>' +
+          '<div style="font-size:11.5px;color:var(--ink-3);margin-top:2px">' + esc(s.address || s.server) + '</div>' +
+          '</button>'
+        ).join('');
+        /* Liste im Speicher parken für die Auswahl */
+        window._untisSearchList = list;
+      }).catch(err => {
+        el.disabled = false;
+        if (results) results.innerHTML = '<div style="font-size:12.5px;color:var(--danger);padding:4px 0">Suche fehlgeschlagen: ' + esc(err.message || 'unbekannt') + '</div>';
+      });
+      return;
+    }
+    case 'untis-pick-school': {
+      const i = parseInt(el.getAttribute('data-i'), 10);
+      const list = window._untisSearchList || [];
+      const s = list[i];
+      if (!s) return;
+      const sv = document.getElementById('untis-server');
+      const sc = document.getElementById('untis-school');
+      if (sv) sv.value = s.server;
+      if (sc) sc.value = s.loginName;
+      const cfg = loadUntisConfig();
+      cfg.server = s.server; cfg.school = s.loginName;
+      saveUntisConfig(cfg);
+      const results = document.getElementById('untis-search-results');
+      if (results) results.innerHTML = '<div style="font-size:12.5px;color:var(--ok);padding:4px 0">✓ ' + esc(s.displayName) + ' übernommen — jetzt Login-Daten eingeben und "Ferien laden" drücken.</div>';
+      return;
+    }
+
     /* --- design / palette --- */
     case 'untis-sync': {
       /* Untis-Credentials aus den Feldern lesen und speichern */
@@ -4397,7 +4532,7 @@ document.addEventListener('click', ev => {
       if (sp) cfg.pass = sp.value;
       saveUntisConfig(cfg);
       const status = document.getElementById('untis-status');
-      if (status) status.textContent = 'Verbinde…';
+      if (status) { status.style.color = 'var(--ink-3)'; status.textContent = 'Verbinde…'; }
       el.disabled = true;
       syncUntisHolidays().then(h => {
         _holidayMaps = {}; // Cache zurücksetzen
@@ -4406,12 +4541,19 @@ document.addEventListener('click', ev => {
       }).catch(err => {
         console.error('Untis sync failed:', err);
         let msg = err.message || 'Verbindung fehlgeschlagen';
-        if (msg.includes('NetworkError') || msg.includes('Failed to fetch')) {
-          msg = 'Verbindung fehlgeschlagen — prüfe Servername und Internetverbindung';
-        } else if (msg.includes('bad credentials') || msg.includes('wrong')) {
-          msg = 'Falscher Username oder Passwort';
+        const low = msg.toLowerCase();
+        if (low.includes('networkerror') || low.includes('failed to fetch') || low.includes('alle proxies')) {
+          msg = 'Verbindung fehlgeschlagen — alle CORS-Proxies down oder Servername falsch. Nutze "Schule suchen".';
+        } else if (low.includes('bad credentials') || low.includes('wrong') || low.includes('no user')) {
+          msg = 'Falscher Username oder Passwort.';
+        } else if (low.includes('too many')) {
+          msg = 'Zu viele Anmeldeversuche — bitte ein paar Minuten warten.';
+        } else if (low.includes('not authenticated')) {
+          msg = 'Sitzung abgelaufen — bitte nochmal versuchen.';
+        } else if (low.includes('http 404')) {
+          msg = 'Server unbekannt (404) — prüfe den Servernamen oder nutze "Schule suchen".';
         }
-        if (status) status.textContent = 'Fehler: ' + msg;
+        if (status) { status.style.color = 'var(--danger)'; status.textContent = 'Fehler: ' + msg; }
         /* Server-Feld aktualisieren falls bereinigt */
         if (sv) { const c = loadUntisConfig(); sv.value = c.server || ''; }
         el.disabled = false;
