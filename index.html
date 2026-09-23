@@ -1381,6 +1381,7 @@ function buildHolidayMap(year) {
 /* ---- WebUntis-Integration ---- */
 const UNTIS_KEY = 'schulmappe.untis';
 const UNTIS_HOLIDAYS_KEY = 'schulmappe.untis.holidays';
+const UNTIS_PROXY_KEY = 'schulmappe.untis.proxy';
 let _untisHolidays = null; // cached parsed holidays from Untis
 
 function loadUntisConfig() {
@@ -1388,6 +1389,16 @@ function loadUntisConfig() {
 }
 function saveUntisConfig(cfg) {
   try { localStorage.setItem(UNTIS_KEY, JSON.stringify(cfg)); } catch (e) {}
+}
+function loadUntisCustomProxy() {
+  try { return (localStorage.getItem(UNTIS_PROXY_KEY) || '').trim(); } catch (e) { return ''; }
+}
+function saveUntisCustomProxy(url) {
+  try {
+    const v = (url || '').trim();
+    if (v) localStorage.setItem(UNTIS_PROXY_KEY, v);
+    else localStorage.removeItem(UNTIS_PROXY_KEY);
+  } catch (e) {}
 }
 function loadUntisHolidays() {
   if (_untisHolidays) return _untisHolidays;
@@ -1413,15 +1424,31 @@ function sanitizeUntisServer(raw) {
   return s;
 }
 
-/* CORS-Proxies — Stand 2026. corsproxy.io ist tot für gehostete Apps
-   (nur noch localhost), proxy.cors.sh + thingproxy komplett offline.
-   Diese hier funktionieren mit POST: */
-const CORS_PROXIES = [
-  u => u,                                                          /* direkt (klappt nur wenn Schule CORS erlaubt) */
-  u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
-  u => 'https://cors.x2u.in/' + u,
-  u => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(u)
-];
+/* CORS-Proxies — Stand 2026. Öffentliche Proxies sind alle flaky bzw. tot,
+   deshalb ist der eigene Cloudflare-Worker (falls konfiguriert) IMMER
+   Priorität 1. Danach wird der Direkt-Versuch probiert (klappt bei manchen
+   Schulen mit offenem CORS), dann die öffentlichen Fallbacks.
+   Custom-URL-Format: entweder mit `{url}`-Platzhalter oder Base-URL, die
+   mit `?url=` o.ä. endet — an letztere wird encodeURIComponent(target)
+   angehängt. Siehe cf-worker/README.md. */
+function makeCustomProxyFn(base) {
+  const s = (base || '').trim();
+  if (!s) return null;
+  if (s.includes('{url}')) return u => s.replace('{url}', encodeURIComponent(u));
+  return u => s + encodeURIComponent(u);
+}
+function getCorsProxies() {
+  const list = [];
+  const custom = makeCustomProxyFn(loadUntisCustomProxy());
+  if (custom) list.push(custom);                                       /* eigener Worker zuerst */
+  list.push(u => u);                                                   /* direkt */
+  list.push(u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u));
+  list.push(u => 'https://corsproxy.io/?' + encodeURIComponent(u));
+  list.push(u => 'https://cors.x2u.in/' + u);
+  list.push(u => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(u));
+  list.push(u => 'https://cors-anywhere.herokuapp.com/' + u);
+  return list;
+}
 
 /* Untis-typische API-Fehler, die NICHT durch Proxy-Wechsel gelöst werden. */
 function isPermanentUntisError(msg) {
@@ -1441,9 +1468,10 @@ async function untisRPC(server, school, method, params, sessionId) {
   if (params) body.params = params;
   const bodyStr = JSON.stringify(body);
 
+  const proxies = getCorsProxies();
   let lastErr;
-  for (let i = 0; i < CORS_PROXIES.length; i++) {
-    const mkProxy = CORS_PROXIES[i];
+  for (let i = 0; i < proxies.length; i++) {
+    const mkProxy = proxies[i];
     try {
       const resp = await fetch(mkProxy(target), {
         method: 'POST',
@@ -1496,10 +1524,11 @@ async function untisSearchSchool(query) {
     jsonrpc: '2.0'
   };
   const bodyStr = JSON.stringify(body);
+  const proxies = getCorsProxies();
   let lastErr;
-  for (let i = 0; i < CORS_PROXIES.length; i++) {
+  for (let i = 0; i < proxies.length; i++) {
     try {
-      const resp = await fetch(CORS_PROXIES[i](target), {
+      const resp = await fetch(proxies[i](target), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: bodyStr,
@@ -3303,7 +3332,24 @@ function viewMehr() {
           (uc.lastSync ? 'Zuletzt: ' + new Date(uc.lastSync).toLocaleDateString('de-AT') + ' — ' + uh.length + ' Ferien geladen'
             : 'Noch nicht verbunden') +
         '</span>' +
-      '</div>';
+      '</div>' +
+      /* Fortgeschritten: eigener CORS-Proxy (Cloudflare Worker etc.). */
+      '<details style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">' +
+        '<summary style="font-size:12.5px;color:var(--ink-3);cursor:pointer;user-select:none">Fortgeschritten: eigener CORS-Proxy</summary>' +
+        '<p style="font-size:12px;color:var(--ink-3);line-height:1.5;margin:10px 0 8px">' +
+          'Falls die öffentlichen Proxies nicht funktionieren: eigener Cloudflare-Worker (Setup in ' +
+          '<code style="font-size:11px">cf-worker/README.md</code> im Repo, dauert ca. 3 Min).<br>' +
+          'Format: Base-URL, an die die WebUntis-URL angehängt wird — z.B. ' +
+          '<code style="font-size:11px">https://mein-worker.workers.dev/?url=</code>. ' +
+          'Alternativ mit <code style="font-size:11px">{url}</code>-Platzhalter.' +
+        '</p>' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+          '<input class="input" id="untis-proxy" type="url" inputmode="url" autocomplete="off" spellcheck="false" ' +
+            'placeholder="https://…workers.dev/?url=" value="' + esc(loadUntisCustomProxy()) + '" style="flex:1;min-width:200px">' +
+          '<button class="btn btn-sm" type="button" data-act="untis-save-proxy">Speichern</button>' +
+          '<button class="btn btn-sm" type="button" data-act="untis-clear-proxy">Löschen</button>' +
+        '</div>' +
+      '</details>';
     if (uh.length) {
       h += '<div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:5px">' +
         uh.map(f => '<span class="chip" style="font-size:11.5px"><span class="chip-dot" style="background:var(--ok)"></span>' +
@@ -4531,6 +4577,26 @@ document.addEventListener('click', ev => {
       saveUntisConfig(cfg);
       const results = document.getElementById('untis-search-results');
       if (results) results.innerHTML = '<div style="font-size:12.5px;color:var(--ok);padding:4px 0">✓ ' + esc(s.displayName) + ' übernommen — jetzt Login-Daten eingeben und "Ferien laden" drücken.</div>';
+      return;
+    }
+    case 'untis-save-proxy': {
+      const inp = document.getElementById('untis-proxy');
+      const raw = inp ? inp.value.trim() : '';
+      const status = document.getElementById('untis-status');
+      if (raw && !/^https:\/\//i.test(raw)) {
+        if (status) { status.style.color = 'var(--danger)'; status.textContent = 'Proxy-URL muss mit https:// beginnen.'; }
+        return;
+      }
+      saveUntisCustomProxy(raw);
+      if (status) { status.style.color = 'var(--ok)'; status.textContent = raw ? '✓ Eigener Proxy gespeichert.' : 'Eigener Proxy entfernt.'; }
+      return;
+    }
+    case 'untis-clear-proxy': {
+      saveUntisCustomProxy('');
+      const inp = document.getElementById('untis-proxy');
+      if (inp) inp.value = '';
+      const status = document.getElementById('untis-status');
+      if (status) { status.style.color = 'var(--ink-3)'; status.textContent = 'Eigener Proxy entfernt.'; }
       return;
     }
 

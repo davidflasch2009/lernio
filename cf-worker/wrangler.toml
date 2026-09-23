@@ -1,0 +1,6 @@
+name = "lernio-untis-proxy"
+main = "worker.js"
+compatibility_date = "2025-09-01"
+
+# Kein KV, keine Secrets, kein Storage — reiner Forward-Proxy.
+# Der kostenlose Cloudflare-Plan reicht (100.000 Requests/Tag).
