@@ -378,7 +378,7 @@
    BASE
    ============================================================ */
 *,*::before,*::after{box-sizing:border-box}
-html,body{height:100%;height:100dvh}
+html,body{height:100%;height:calc(100dvh + var(--vp-gap,0px))}
 body{
   margin:0;
   background:var(--bg);
@@ -402,7 +402,7 @@ input,select,textarea,button{font-family:inherit}
 /* ============================================================
    APP SHELL
    ============================================================ */
-#app{display:flex;height:100%;height:100dvh;overflow:hidden}
+#app{display:flex;height:100%;height:calc(100dvh + var(--vp-gap,0px));overflow:hidden}
 
 /* --- Sidebar (desktop) --- */
 #sidebar{
@@ -466,7 +466,7 @@ input,select,textarea,button{font-family:inherit}
 /* --- Bottom tabs (mobile) --- */
 #tabbar{
   display:none;
-  position:fixed;left:0;right:0;bottom:0;z-index:40;
+  position:fixed;left:0;right:0;bottom:calc(0px - var(--vp-gap,0px));z-index:40;
   background:var(--surface);border-top:1px solid var(--line);
   padding-bottom:env(safe-area-inset-bottom,0px);
 }
@@ -491,7 +491,7 @@ input,select,textarea,button{font-family:inherit}
 /* --- Floating add button --- */
 #fab{
   position:fixed;right:20px;z-index:45;
-  bottom:calc(20px + env(safe-area-inset-bottom,0px));
+  bottom:calc(20px + env(safe-area-inset-bottom,0px) - var(--vp-gap,0px));
   width:54px;height:54px;border-radius:17px;border:0;
   background:var(--accent);color:var(--accent-ink);
   box-shadow:var(--shadow-md);
@@ -881,7 +881,7 @@ input,select,textarea,button{font-family:inherit}
    FORMS / MODAL
    ============================================================ */
 .backdrop{
-  position:fixed;inset:0;z-index:100;
+  position:fixed;inset:0;bottom:calc(0px - var(--vp-gap,0px));z-index:100;
   background:rgba(8,18,17,.5);backdrop-filter:blur(3px);
   display:flex;align-items:flex-end;justify-content:center;
   padding:0;
@@ -1153,7 +1153,7 @@ input,select,textarea,button{font-family:inherit}
 /* toast */
 #toast{
   position:fixed;left:50%;transform:translateX(-50%);
-  bottom:calc(22px + env(safe-area-inset-bottom,0px));
+  bottom:calc(22px + env(safe-area-inset-bottom,0px) - var(--vp-gap,0px));
   z-index:200;width:max-content;max-width:min(440px,calc(100vw - 32px));
   background:var(--ink);color:var(--bg);
   padding:11px 17px;border-radius:var(--r-lg);
@@ -1176,7 +1176,7 @@ input,select,textarea,button{font-family:inherit}
   #tabbar{display:block}
   #view{padding:18px 16px 26px;max-width:none;min-height:calc(100dvh - 100px)}
   #scroll{padding-bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom,0px) + 8px);-webkit-overflow-scrolling:touch;touch-action:pan-y}
-  #fab{bottom:calc(var(--tabbar-h) + 16px + env(safe-area-inset-bottom,0px));right:16px;width:50px;height:50px;border-radius:16px}
+  #fab{bottom:calc(var(--tabbar-h) + 16px + env(safe-area-inset-bottom,0px) - var(--vp-gap,0px));right:16px;width:50px;height:50px;border-radius:16px}
   .page-title{font-size:25px}
   .today-daynum{font-size:38px}
   .today-hero{padding:16px 17px;gap:16px}
@@ -1428,7 +1428,7 @@ input,select,textarea,button{font-family:inherit}
    ============================================================ */
 :root[data-palette="glass"] body{background:var(--bg);letter-spacing:-.003em}
 :root[data-palette="glass"] body::before{
-  content:"";position:fixed;inset:0;z-index:0;pointer-events:none;background:var(--glass-wall);
+  content:"";position:fixed;inset:0;bottom:calc(0px - var(--vp-gap,0px));z-index:0;pointer-events:none;background:var(--glass-wall);
 }
 :root[data-palette="glass"] #app{position:relative;z-index:1}
 
@@ -1659,15 +1659,17 @@ input,select,textarea,button{font-family:inherit}
 @media (max-width:720px){
   :root[data-palette="glass"] #main{position:relative}
   :root[data-palette="glass"] #topbar{
-    position:absolute;top:0;left:0;right:0;
-    background:var(--glass-bar);border-bottom:.5px solid var(--line);
+    position:absolute;top:0;left:0;right:0;padding-bottom:22px;
+    background:linear-gradient(180deg,var(--bg) 0%,transparent 100%);border-bottom:0;
+    -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+    -webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 22px),transparent);mask-image:linear-gradient(180deg,#000 calc(100% - 22px),transparent);
   }
   :root[data-palette="glass"] #scroll{
     padding-top:calc(52px + env(safe-area-inset-top,0px));
     padding-bottom:calc(100px + env(safe-area-inset-bottom,0px));
   }
   :root[data-palette="glass"] #tabbar{
-    left:12px;right:12px;bottom:max(10px,calc(env(safe-area-inset-bottom,0px) - 12px));
+    left:12px;right:12px;bottom:calc(max(10px,calc(env(safe-area-inset-bottom,0px) - 12px)) - var(--vp-gap,0px));
     padding-bottom:0;border:0;border-radius:999px;
     background:linear-gradient(180deg,var(--glass-sheen),transparent 60%),var(--glass-bar);
     box-shadow:0 12px 40px rgba(20,24,60,.18),0 2px 8px rgba(20,24,60,.08),inset 0 1px 0 var(--glass-hi),inset 0 -1px 0 var(--glass-lo);
@@ -1684,8 +1686,8 @@ input,select,textarea,button{font-family:inherit}
   :root[data-palette="glass"] .tab-btn:active{transform:scale(.9)}
   :root[data-palette="glass"] .tab-btn[aria-current="page"]{color:var(--accent)}
   :root[data-palette="glass"] .tab-dot{top:3px;left:calc(50% + 5px)}
-  :root[data-palette="glass"] #fab{bottom:calc(76px + max(10px,calc(env(safe-area-inset-bottom,0px) - 12px)));right:16px;width:56px;height:56px}
-  :root[data-palette="glass"] #toast{bottom:calc(80px + max(10px,calc(env(safe-area-inset-bottom,0px) - 12px)))}
+  :root[data-palette="glass"] #fab{bottom:calc(76px + max(10px,calc(env(safe-area-inset-bottom,0px) - 12px)) - var(--vp-gap,0px));right:16px;width:56px;height:56px}
+  :root[data-palette="glass"] #toast{bottom:calc(80px + max(10px,calc(env(safe-area-inset-bottom,0px) - 12px)) - var(--vp-gap,0px))}
   :root[data-palette="glass"] .modal::after{
     content:"";position:absolute;top:7px;left:50%;width:38px;height:5px;margin-left:-19px;
     border-radius:3px;background:var(--ink-4);
@@ -6044,6 +6046,16 @@ $('#theme-toggle-m').addEventListener('click', toggleTheme);
   const validPalettes = PALETTES.map(x => x.id);
   if (p && validPalettes.includes(p)) applyPalette(p);
   applyTheme(t === 'dark' || t === 'light' ? t : 'auto');
+
+  /* iOS home-screen app: the layout viewport can end short of the screen
+     (black strip under the tab bar) — measure the gap and paint over it */
+  const fitViewport = () => {
+    const portrait = innerHeight > innerWidth;
+    const gap = navigator.standalone === true && portrait ? Math.max(0, Math.min(80, screen.height - innerHeight)) : 0;
+    document.documentElement.style.setProperty('--vp-gap', gap + 'px');
+  };
+  fitViewport();
+  addEventListener('resize', fitViewport);
 
   loadTimer();
   if (Timer) {
